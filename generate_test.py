@@ -10,4 +10,4 @@ shape_pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained('tencent/Hunyu
 mesh_untextured = shape_pipeline(image='assets/demo.png')[0]
 
 paint_pipeline = Hunyuan3DPaintPipeline(Hunyuan3DPaintConfig(max_num_view=6, resolution=512))
-mesh_textured = paint_pipeline(mesh_path, image_path='assets/demo.png')
+mesh_textured = paint_pipeline(output_mesh_path='test.glb', image_path='assets/demo.png')
