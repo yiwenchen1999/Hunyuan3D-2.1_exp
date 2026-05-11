@@ -35,9 +35,9 @@ except:
 
 try:
     from .mesh_inpaint_processor import meshVerticeInpaint  # , meshVerticeColor
-except:
+except Exception as e:
     meshVerticeInpaint = None
-    print("InPaint Function CAN NOT BE Imported!!!")
+    print(f"InPaint Function CAN NOT BE Imported!!! ({e})")
 
 
 class RenderMode(Enum):

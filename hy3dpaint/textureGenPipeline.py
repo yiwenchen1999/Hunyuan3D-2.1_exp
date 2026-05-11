@@ -115,7 +115,18 @@ class Hunyuan3DPaintPipeline:
 
         # Output path
         if output_mesh_path is None:
-            output_mesh_path = os.path.join(path, f"textured_mesh.obj")
+            output_mesh_path = os.path.join(path, "textured_mesh.obj")
+
+        output_ext = os.path.splitext(output_mesh_path)[1].lower()
+        if output_ext == ".glb":
+            output_obj_path = os.path.splitext(output_mesh_path)[0] + ".obj"
+            output_glb_path = output_mesh_path
+        elif output_ext == ".obj":
+            output_obj_path = output_mesh_path
+            output_glb_path = os.path.splitext(output_mesh_path)[0] + ".glb"
+        else:
+            output_obj_path = output_mesh_path + ".obj"
+            output_glb_path = output_mesh_path + ".glb"
 
         # Load mesh
         mesh = trimesh.load(processed_mesh_path)
@@ -186,10 +197,10 @@ class Hunyuan3DPaintPipeline:
             texture_mr = self.view_processor.texture_inpaint(texture_mr, mask_mr_np)
             self.render.set_texture_mr(texture_mr)
 
-        self.render.save_mesh(output_mesh_path, downsample=True)
+        self.render.save_mesh(output_obj_path, downsample=True)
 
         if save_glb:
-            convert_obj_to_glb(output_mesh_path, output_mesh_path.replace(".obj", ".glb"))
-            output_glb_path = output_mesh_path.replace(".obj", ".glb")
+            convert_obj_to_glb(output_obj_path, output_glb_path)
+            return output_glb_path
 
-        return output_mesh_path
+        return output_obj_path
