@@ -14,9 +14,9 @@
 
 import os
 import cv2
-import bpy
-import math
+# import bpy  # Replaced with trimesh-based conversion to avoid Blender runtime dependency.
 import numpy as np
+import trimesh
 from io import StringIO
 from typing import Optional, Tuple, Dict, Any
 
@@ -197,64 +197,20 @@ def save_mesh(mesh_path, vtx_pos, pos_idx, vtx_uv, uv_idx, texture, metallic=Non
     )
 
 
-def _setup_blender_scene():
-    """Setup Blender scene for conversion."""
-    if "convert" not in bpy.data.scenes:
-        bpy.data.scenes.new("convert")
-    bpy.context.window.scene = bpy.data.scenes["convert"]
-
-
-def _clear_scene_objects():
-    """Clear all objects from current Blender scene."""
-    for obj in bpy.context.scene.objects:
-        obj.select_set(True)
-        bpy.data.objects.remove(obj, do_unlink=True)
-
-
-def _select_mesh_objects():
-    """Select all mesh objects in scene."""
-    bpy.ops.object.select_all(action="DESELECT")
-    for obj in bpy.context.scene.objects:
-        if obj.type == "MESH":
-            obj.select_set(True)
-
-
-def _merge_vertices_if_needed(merge_vertices: bool):
-    """Merge duplicate vertices if requested."""
+def _merge_vertices_if_needed(mesh_or_scene: Any, merge_vertices: bool) -> Any:
+    """Merge duplicate vertices on trimesh objects if requested."""
     if not merge_vertices:
-        return
+        return mesh_or_scene
 
-    for obj in bpy.context.selected_objects:
-        if obj.type == "MESH":
-            bpy.context.view_layer.objects.active = obj
-            bpy.ops.object.mode_set(mode="EDIT")
-            bpy.ops.mesh.select_all(action="SELECT")
-            bpy.ops.mesh.remove_doubles()
-            bpy.ops.object.mode_set(mode="OBJECT")
+    if isinstance(mesh_or_scene, trimesh.Trimesh):
+        mesh_or_scene.merge_vertices()
+        return mesh_or_scene
 
-
-def _apply_shading(shade_type: str, auto_smooth_angle: float):
-    """Apply shading to selected objects."""
-    shading_ops = {
-        "SMOOTH": lambda: bpy.ops.object.shade_smooth(),
-        "FLAT": lambda: bpy.ops.object.shade_flat(),
-        "AUTO_SMOOTH": lambda: _apply_auto_smooth(auto_smooth_angle),
-    }
-
-    if shade_type in shading_ops:
-        shading_ops[shade_type]()
-
-
-def _apply_auto_smooth(auto_smooth_angle: float):
-    """Apply auto smooth based on Blender version."""
-    angle_rad = math.radians(auto_smooth_angle)
-
-    if bpy.app.version < (4, 1, 0):
-        bpy.ops.object.shade_smooth(use_auto_smooth=True, auto_smooth_angle=angle_rad)
-    elif bpy.app.version < (4, 2, 0):
-        bpy.ops.object.shade_smooth_by_angle(angle=angle_rad)
-    else:
-        bpy.ops.object.shade_auto_smooth(angle=angle_rad)
+    if isinstance(mesh_or_scene, trimesh.Scene):
+        for geom in mesh_or_scene.geometry.values():
+            if isinstance(geom, trimesh.Trimesh):
+                geom.merge_vertices()
+    return mesh_or_scene
 
 
 def convert_obj_to_glb(
@@ -264,21 +220,23 @@ def convert_obj_to_glb(
     auto_smooth_angle: float = 60,
     merge_vertices: bool = False,
 ) -> bool:
-    """Convert OBJ file to GLB format using Blender."""
+    """Convert OBJ file to GLB format using trimesh."""
     try:
-        _setup_blender_scene()
-        _clear_scene_objects()
+        # Keep these args for API compatibility with existing callers.
+        _ = shade_type, auto_smooth_angle
 
-        # Import OBJ file
-        bpy.ops.wm.obj_import(filepath=obj_path)
-        _select_mesh_objects()
+        mesh_or_scene = trimesh.load(obj_path, force="scene", process=False)
+        mesh_or_scene = _merge_vertices_if_needed(mesh_or_scene, merge_vertices)
 
-        # Process meshes
-        _merge_vertices_if_needed(merge_vertices)
-        _apply_shading(shade_type, auto_smooth_angle)
+        glb_data = mesh_or_scene.export(file_type="glb")
+        if isinstance(glb_data, str):
+            glb_data = glb_data.encode("utf-8")
 
-        # Export to GLB
-        bpy.ops.export_scene.gltf(filepath=glb_path, use_active_scene=True)
+        output_dir = os.path.dirname(glb_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        with open(glb_path, "wb") as f:
+            f.write(glb_data)
         return True
     except Exception:
         return False
